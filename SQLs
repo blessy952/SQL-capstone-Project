@@ -1,0 +1,94 @@
+
+-- SQL queries for analysis and integrity checks on AirlineDB
+
+-- 1️ List all flights with total number of passengers per flight segment
+SELECT 
+    tf.flight_id,
+    COUNT(bp.ticket_no) AS total_passengers
+FROM 
+    ticket_flights tf
+JOIN 
+    boarding_passes bp ON tf.ticket_no = bp.ticket_no AND tf.flight_id = bp.flight_id
+GROUP BY 
+    tf.flight_id
+ORDER BY 
+    total_passengers DESC;
+
+-- 2️ Detect duplicate seat assignments on the same flight (data integrity check)
+SELECT 
+    flight_id, seat_no,
+    COUNT(*) AS occurrences
+FROM 
+    boarding_passes
+GROUP BY 
+    flight_id, seat_no
+HAVING 
+    COUNT(*) > 1;
+
+-- 3️ Find passengers who checked in for flights not included in their ticket (should return 0 rows ideally)
+SELECT 
+    bp.ticket_no, bp.flight_id
+FROM 
+    boarding_passes bp
+LEFT JOIN 
+    ticket_flights tf ON bp.ticket_no = tf.ticket_no AND bp.flight_id = tf.flight_id
+WHERE 
+    tf.flight_id IS NULL;
+
+-- 4️ Find round-trip tickets (tickets that include at least two opposite flights)
+SELECT 
+    tf.ticket_no
+FROM 
+    ticket_flights tf
+JOIN 
+    flights f1 ON tf.flight_id = f1.flight_id
+JOIN 
+    flights f2 ON tf.flight_id != f2.flight_id AND tf.ticket_no = tf.ticket_no
+    AND f1.arrival_airport = f2.departure_airport AND f1.departure_airport = f2.arrival_airport
+GROUP BY 
+    tf.ticket_no;
+
+-- 5️ Most frequently used flight routes
+SELECT 
+    f.departure_airport, f.arrival_airport, COUNT(*) AS flight_count
+FROM 
+    flights f
+GROUP BY 
+    f.departure_airport, f.arrival_airport
+ORDER BY 
+    flight_count DESC
+LIMIT 10;
+
+-- 6 Calculate seat utilization per flight (number of boarding passes issued vs aircraft seat count)
+SELECT 
+    f.flight_id, 
+    COUNT(bp.boarding_no) AS occupied_seats,
+    a.model,
+    s.total_seats
+FROM 
+    flights f
+JOIN 
+    boarding_passes bp ON f.flight_id = bp.flight_id
+JOIN 
+    aircrafts a ON f.aircraft_code = a.aircraft_code
+JOIN 
+    (
+        SELECT aircraft_code, COUNT(*) AS total_seats
+        FROM seats
+        GROUP BY aircraft_code
+    ) s ON a.aircraft_code = s.aircraft_code
+GROUP BY 
+    f.flight_id, a.model, s.total_seats
+ORDER BY 
+    occupied_seats DESC;
+
+-- 7 Identify most active customers based on number of tickets booked
+SELECT 
+    passenger_name, COUNT(DISTINCT ticket_no) AS tickets_booked
+FROM 
+    tickets
+GROUP BY 
+    passenger_name
+ORDER BY 
+    tickets_booked DESC
+LIMIT 10;
